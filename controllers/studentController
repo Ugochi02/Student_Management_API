@@ -1,0 +1,287 @@
+const { Student } = require('../models');
+const fs = require('fs')
+
+exports.addStudent = async (req, res) => {
+    try {
+       const { fullName, email, phone, department } = req.body;
+    //    const file = req.file.path;
+       const existingStudent = await Student.findOne({
+            where: { email }
+        });
+
+         if (existingStudent) {
+            if (req.file) deleteFiles([req.file.filename]);
+
+            return res.status(409).json({
+                message: 'Email already exists'
+            });
+        }
+
+       const student = await Student.create({
+        fullName, 
+        email, 
+        phone, 
+        department, 
+        profileImage: req.file? req.file.filename: null
+       });
+
+       res.status(201).json({
+        message: 'student Added Successfully',
+        data: student
+       })
+    } catch (error) {
+        res.status(500).json({
+            message: error.message
+        })
+    }
+}
+
+exports.getOneStudent = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const student = await Student.findByPk(id);
+
+        if (!student) {
+            return res.status(404).json({
+                message: 'Student not found'
+            })
+        }
+
+        res.status(200).json({
+            message: 'student found',
+            data: student
+        })
+    } catch (error) {
+        res.status(500).json({
+            message: error.message
+        })
+    }
+}
+exports.getAllStudents = async (req, res) => {
+    try {
+        const allStudents = await Student.findAll();
+        res.status(200).json({
+            message: `All Students found and the total is: ${allStudents.length}`,
+            data: allStudents
+        })
+    } catch (error) {
+        res.status(500).json({
+            message: error.message
+        })
+    }
+}
+
+exports.updateStudent = async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { fullName, email, phone, department } = req.body;
+        
+        const student = await Student.findByPk(id);
+
+        if (!student) {
+            if (req.file) deleteFiles([req.file.filename]);
+
+            return res.status(404).json({
+                message: 'Student not found'
+            });
+        }
+
+        const data = {
+            fullName, 
+            email, 
+            phone, 
+            department
+        }
+
+        if (req.file) {
+            const oldFilePath = student.profileImage
+            fs.unlinkSync(oldFilePath);
+            data.profileImage = req.file.path
+        }
+
+
+        const oldImage = student.profileImage;
+
+        await student.update(data) 
+
+        profileImage: req.file? req.file.filename: student.profileImage
+
+        if (req.file && oldImage) {
+            deleteFiles([oldImage]);
+        }
+
+
+
+        res.status(200).json({
+            message: "Student Updated Successfully",
+            data: student
+        })
+    } catch (error) {
+        if (req.file) deleteFiles([req.file.filename]);
+        res.status(500).json({
+            message: error.message
+        })
+    }
+}
+
+exports.deleteStudent = async (req, res) => {
+    try {
+        const id = req.params.id;
+
+        const student = await Student.findByPk(id);
+
+        if (!student) {
+            return res.status(404).json({
+                message: 'Student not found'
+            })
+        }
+
+        const images = [
+            student.profileImage,
+            student.passportImage,
+            student.identityCardImage,
+            (student.galleryImages || [])
+        ].filter(Boolean);
+
+        if (student.profileImage) {
+            const oldFilePath = product.profileImage;
+            fs.unlinkSync(oldFilePath);
+        }
+
+        await student.destroy();
+
+        deleteFiles(images);
+
+        res.status(200).json({
+            message: "Student Deleted Successfully"
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            message: error.message
+        })
+    }
+}
+
+exports.uploadGallery = async (req, res) => {
+    try {
+
+        const student = await Student.findByPk(req.params.id);
+
+        if (!student) {
+            deleteFiles((req.files || []).map(file => file.filename));
+
+            return res.status(404).json({
+                message: 'Student not found'
+            });
+        }
+
+        const newImages = (req.files || []).map(
+            file => file.filename
+        );
+
+        const gallery = [
+            (student.galleryImages || []), newImages
+        ];
+
+        await student.update({
+            galleryImages: gallery
+        });
+
+        res.status(200).json({
+            message: 'Gallery uploaded successfully',
+            galleryImages: gallery
+        });
+
+    } catch (error) {
+
+        deleteFiles((req.files || []).map(file => file.filename));
+
+        res.status(500).json({
+            message: error.message
+        });
+
+    }
+};
+
+exports.uploadDifferentImages = async (req, res) => {
+    const files = req.files || {};
+
+    const uploaded = Object.values(files).flat().map(file => file.filename);
+
+    try {
+
+        const student = await Student.findByPk(req.params.id);
+
+        if (!student) {
+            deleteFiles(uploaded);
+
+            return res.status(404).json({
+                message: 'Student not found'
+            });
+        }
+
+        const gallery = [
+            (student.galleryImages || []),
+            (files.galleryImages || []).map(file => file.filename)
+        ];
+
+        const updates = {};
+
+        if (files.passportImage) {
+            updates.passportImage = files.passportImage[0].filename;
+        }
+
+        if (files.identityCardImage) {
+            updates.identityCardImage = files.identityCardImage[0].filename;
+        }
+
+        if (files.profileImage) {
+            updates.profileImage = files.profileImage[0].filename;
+        }
+
+        if (files.galleryImages) {
+            updates.galleryImages = gallery;
+        }
+
+        const oldImages = [];
+
+        if (files.passportImage && student.passportImage) {
+            oldImages.push(student.passportImage);
+        }
+
+        if (files.identityCardImage && student.identityCardImage) {
+            oldImages.push(student.identityCardImage);
+        }
+
+        if (files.profileImage && student.profileImage) {
+            oldImages.push(student.profileImage);
+        }
+
+        await student.update(updates);
+
+        deleteFiles(oldImages);
+
+        res.status(200).json({
+            message: 'Images uploaded successfully',
+
+            uploadedImages: {
+                passportImage: files.passportImage || [],
+                identityCardImage: files.identityCardImage || [],
+                profileImage: files.profileImage || [],
+                galleryImages: files.galleryImages || []
+            },
+
+            student
+        });
+
+    } catch (error) {
+
+        deleteFiles(uploaded);
+
+        res.status(500).json({
+            message: error.message
+        });
+
+    }
+};
